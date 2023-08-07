@@ -144,15 +144,27 @@ def get_mat_from_odom_msg(msg: Odometry) -> np.ndarray:
     return _tf_mat
 
 
-def get_2d_pose(_tf: np.ndarray) -> Pose2D:
+def get_2d_pose(_tf: np.ndarray, offset=0.0) -> Pose2D:
     """
     :param:   input homogenous matrix
     :return : 2dPose in x, y, yaw format
     """
     trans = ts.translation_from_matrix(_tf)
     euler = ts.euler_from_matrix(_tf)
+    trans[0] += math.sin(euler[2])*offset
+    trans[1] += math.cos(euler[2])*offset
     return trans[0], trans[1], euler[2]
 
+def get_2d_pose_o(_tf: np.ndarray, offset=0.0) -> Pose2D:
+    """
+    :param:   input homogenous matrix
+    :return : 2dPose in x, y, yaw format
+    """
+    trans = ts.translation_from_matrix(_tf)
+    euler = ts.euler_from_matrix(_tf)
+    trans[0] += math.sin(euler[2])*offset
+    trans[1] += math.cos(euler[2])*offset
+    return trans[0] * -1, trans[1] * -1, euler[2] * -1
 
 def apply_2d_transform(mat: np.ndarray, transform: Pose2D) -> np.ndarray:
     """

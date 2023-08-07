@@ -35,53 +35,54 @@ class DefaultAutoDockConfig(AutoDockConfig):
     # Note: all these tf computations are reference to robot base_link. Hence,
     """
     # General Configs
-    cam_offset = 0.35           # camera to base link, for edge2edge distance
+    cam_offset = 0.125        # camera to base link, for edge2edge distance
     front_dock = False
-    tf_expiry: float = 1.0      # sec
+    tf_expiry: float = 5.0      # sec
     dock_timeout = 220          # sec
     controller_rate = 4.0       # hz
 
     # goal thresh
-    stop_yaw_diff = 0.03        # radian
+    stop_yaw_diff = 0.08        # radian
     stop_trans_diff = 0.02      # meters
 
     # frames and topics
     base_link = "base_link"
-    left_marker = "fiducial_10"
-    right_marker = "fiducial_11"
-    centre_marker = "fiducial_20"
-
+    # Fix variables
+    left_marker = "dock_frame"
+    right_marker = "dock_frame"
+    centre_marker = "dock_frame"
+    dock = "dock_frame"
     # velocity profiles
     linear_vel_range = (-0.6, 0.6)
     angular_vel_range = (-0.4, 0.4)
 
-    max_linear_vel = 0.5         # m/s, for parallel.c and steer
-    min_linear_vel = 0.25        # m/s, for lastmile
-    max_angular_vel = 0.35       # rad/s
-    min_angular_vel = 0.20       # rad/s
+    max_linear_vel = 0.2         # m/s, for parallel.c and steer
+    min_linear_vel = 0.1        # m/s, for lastmile
+    max_angular_vel = 0.20       # rad/s
+    min_angular_vel = 0.10       # rad/s
 
     # predock state
     max_parallel_offset = 0.16     # m, will move to parallel.c if exceeded
-    predock_tf_samples = 5         # tf samples to avg, parallel.c validation
+    predock_tf_samples = 3         # tf samples to avg, parallel.c validation
 
     # steer dock state
-    offset_to_angular_vel = 2   # factor to convert y-offset to ang vel
+    offset_to_angular_vel = 1   # factor to convert y-offset to ang vel
     to_last_mile_dis = 0.50     # edge2edge distance where transition to LM
     to_last_mile_tol = 0.25     # transition tolerance from SD to LM
 
     # last mile
-    stop_distance = 0.10        # edge2edge distance to stop from charger
+    stop_distance = 0.90        # edge2edge distance to stop from charger
     max_last_mile_odom = 0.20   # max last mile odom move without using marker
 
     # activate charger state
-    enable_charger_srv = True
+    enable_charger_srv = False #True
     check_battery_status = False
     check_battery_timeout = 1.0
     charger_srv_name = "trigger_charger_srv"
     battery_status_topic = "battery_state"
 
     # retry state
-    retry_count = 1             # how many times to retry
+    retry_count = 3             # how many times to retry
     retry_retreat_dis = 0.4     # meters, distance retreat during retry
 
     # debug state
@@ -124,7 +125,7 @@ class AutoDockStateMachine(AutoDockServer):
         self.dock_state = DockState.IDLE
 
     def init_params(self):
-        rospy.loginfo("Getting AutoDockServer params from rosparams server")
+        rospy.loginfo("Getting AutoDockServer pcarams from rosparams server")
         param_names = [attr for attr in dir(self.cfg) if not callable(
             getattr(self.cfg, attr)) and not attr.startswith("__")]
 
@@ -273,9 +274,8 @@ class AutoDockStateMachine(AutoDockServer):
         # if only one single side marker detected, will purely depends to that
         # marker to rotate till facing the charger. then will check if both
         # markers exist again.
-        if self.get_centre_of_side_markers() is None:
-            if not self.do_single_side_marker_rotate():
-                return False
+        if self.get_dock_frame() is None:
+            return False
 
         # start predock loop
         _pose_list = []
@@ -288,10 +288,10 @@ class AutoDockStateMachine(AutoDockServer):
                 if not self.do_pause():
                     return False
 
-            centre_tf = self.get_centre_of_side_markers()
+            centre_tf = self.get_dock_frame()
 
             if centre_tf is None:
-                rospy.logerr("Not detecting two side markers, exit state")
+                rospy.logerr("Not detecting docking station, exit state")
                 return False
 
             if self.cfg.front_dock:
@@ -311,8 +311,8 @@ class AutoDockStateMachine(AutoDockServer):
                     print(f"Getting {remainings} more samples for averaging")
                     _pose_list.append(marker_to_base_link_tf)
                     continue
-
-                y_offset = utils.avg_2d_poses(_pose_list)[1]
+                # Fix Me
+                y_offset = utils.avg_2d_poses(_pose_list)[1] * -1
                 if self.cfg.front_dock:  # TODO
                     y_offset *= -1
                 _pose_list = []
@@ -348,7 +348,7 @@ class AutoDockStateMachine(AutoDockServer):
             self.cfg.cam_offset + self.cfg.to_last_mile_dis
         transition_dis_with_tol = \
             offset_from_charger + self.cfg.to_last_mile_tol
-        _dir = 1 if self.cfg.front_dock else -1
+        _dir = -1 if self.cfg.front_dock else 1 #Fix Me
 
         while not rospy.is_shutdown():
             if self.check_cancel():
@@ -359,12 +359,12 @@ class AutoDockStateMachine(AutoDockServer):
                     return False
 
             # Note that centre_tf is consists of a front_offset
-            centre_tf = self.get_centre_of_side_markers(offset_from_charger)
+            centre_tf = self.get_dock_frame(offset_from_charger)
 
             # check if both markers are not detected
             if centre_tf is None:
                 rospy.logwarn("Not detecting two sides marker")
-                centre_tf_mat = self.get_tf(self.cfg.centre_marker)
+                centre_tf_mat = self.get_tf(self.cfg.dock)
 
                 if centre_tf_mat is None:
                     rospy.logerr("Not able to locate centre marker too")
@@ -395,9 +395,12 @@ class AutoDockStateMachine(AutoDockServer):
             print(f"  DETECTED both side markers!! "
                   f"[d: {dis:.2f}, offset: {offset:.2f}]")
 
-            ang_vel = utils.sat_proportional_filter(
-                -offset, factor=self.cfg.offset_to_angular_vel)
-            self.publish_cmd(linear_vel=_dir*self.cfg.max_linear_vel,
+            ang_vel = 0
+                # Hardcoded, Fix Me
+                # utils.sat_proportional_filter(
+                #-offset, factor=self.cfg.offset_to_angular_vel)
+            
+            self.publish_cmd(linear_vel=_dir*self.cfg.max_linear_vel * -1,
                              angular_vel=ang_vel)
             rospy.sleep(self.sleep_period)
         exit(0)
@@ -421,7 +424,7 @@ class AutoDockStateMachine(AutoDockServer):
                 if not self.do_pause():
                     return False
 
-            centre_tf_mat = self.get_tf(self.cfg.centre_marker)
+            centre_tf_mat = self.get_tf(self.cfg.dock)
 
             # Final Dock based on odom if centre marker is getting to close
             if centre_tf_mat is None:
@@ -439,7 +442,8 @@ class AutoDockStateMachine(AutoDockServer):
                 centre_tf = utils.flip_base_frame(centre_tf)
             dis, _, yaw = centre_tf
 
-            yaw -= math.pi/2
+            #yaw -= math.pi/2
+            #CheckMe
             remaining_dis = - dis - self.cfg.stop_distance - self.cfg.cam_offset
             print(f" Approaching Charger -> d: {dis:.3f}, yaw: {yaw:.2f}"
                   f", remaining dis: {remaining_dis:.3f}")

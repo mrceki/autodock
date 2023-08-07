@@ -50,6 +50,7 @@ class AutoDockConfig:
     base_link: str
     left_marker: str
     right_marker: str
+    dock: str
     # vel profile
     linear_vel_range: Tuple[float, float]
     angular_vel_range = Tuple[float, float]
@@ -242,6 +243,19 @@ class AutoDockServer:
         # the camera. this is to create a point in front of the goal
         return utils.get_centre_tf(left_tf, right_tf, offset)
 
+    def get_dock_frame(self, offset=0.0) -> Pose2D:
+        """
+        Get centre tf of the dock frame, reference to base_link
+        :return: tf of the centre [x, y, yaw]
+        """
+        now = rospy.Time.now()
+        dock_tf = self.get_tf(self.cfg.dock, target_time=now)
+
+        if dock_tf is None:
+            return None
+        # Add offset if required!!!!!
+        return utils.get_2d_pose_o(dock_tf, offset)
+    
     def do_pause(self) -> bool:
         """
         Blocking function which will pause the action server.

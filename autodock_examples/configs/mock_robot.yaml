@@ -7,6 +7,7 @@ base_link : "base_footprint"
 left_marker: "fiducial_10"
 centre_marker: "fiducial_20"
 right_marker: "fiducial_11"
+dock: "dock_frame"
 
 ##############################################################################
 # Vel profiles
