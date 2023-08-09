@@ -311,7 +311,7 @@ class AutoDockServer:
             # This makes sure that the robot is actually moving linearly
             ang_vel = utils.sat_proportional_filter(
                 dyaw, abs_max=self.cfg.min_angular_vel, factor=0.2)
-            l_vel = utils.bin_filter(dx, self.cfg.min_linear_vel)
+            l_vel = utils.bin_filter(dx, self.cfg.min_linear_vel) * -1 #Fix Me
 
             self.publish_cmd(linear_vel=l_vel, angular_vel=ang_vel)
             rospy.sleep(self.sleep_period)

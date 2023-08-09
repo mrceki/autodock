@@ -247,7 +247,7 @@ def bin_filter(input: float, abs_boundary: float) -> float:
     :return             : output binary value
     """
     output = abs(abs_boundary)
-    if input < 0:
+    if input > 0:   # Fix Me
         output = -abs(abs_boundary)
     return output
 
