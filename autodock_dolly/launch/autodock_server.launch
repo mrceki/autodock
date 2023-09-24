@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="autodock_dolly" name="simple_autodock" type="simple_dolly_autodock.py" 
+          args="--server " output="screen" respawn="false">
+    </node>
+</launch>

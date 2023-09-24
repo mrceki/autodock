@@ -93,6 +93,7 @@ class AutoDockServer:
         self.__tf_listener = tf2_ros.TransformListener(self.__tfBuffer)
 
         # create_publisher to cmd_vel
+        # self.__cmd_vel_pub = rospy.Publisher('/hamal/mobile_base_controller/cmd_vel', Twist, queue_size=5)
         self.__cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=5)
 
         # create_subscriber to pause dock
@@ -196,6 +197,10 @@ class AutoDockServer:
                 rospy.wait_for_message(
                     "/odom", Odometry, timeout=self.cfg.tf_expiry)
             )
+            #         return utils.get_mat_from_odom_msg(
+            #     rospy.wait_for_message(
+            #         "/hamal/mobile_base_controller/odom", Odometry, timeout=self.cfg.tf_expiry)
+            # )
         except rospy.exceptions.ROSException:
             rospy.logerr(f"Failed to get odom")
             return None
@@ -243,7 +248,7 @@ class AutoDockServer:
         # the camera. this is to create a point in front of the goal
         return utils.get_centre_tf(left_tf, right_tf, offset)
 
-    def get_dock_frame(self, offset=0.0) -> Pose2D:
+    def get_dolly_frame(self, offset=0.0) -> Pose2D:
         """
         Get centre tf of the dock frame, reference to base_link
         :return: tf of the centre [x, y, yaw]

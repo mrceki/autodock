@@ -72,7 +72,7 @@ class DefaultAutoDockConfig(AutoDockConfig):
 
     # last mile
     stop_distance = 0.0        # edge2edge distance to stop from charger
-    max_last_mile_odom = 0.20   # max last mile odom move without using marker
+    max_last_mile_odom = 0.30   # max last mile odom move without using marker
 
     # activate charger state
     enable_charger_srv = False #True
@@ -449,9 +449,10 @@ class AutoDockStateMachine(AutoDockServer):
             print(f" Approaching Charger -> d: {dis:.3f}, yaw: {yaw:.2f}"
                   f", remaining dis: {remaining_dis:.3f}")
 
-            if (remaining_dis <= 0):
+            if (remaining_dis <= 0.02):
                 rospy.loginfo(" ~ STOP!! Reach destination! ~")
-                self.publish_cmd()
+                self.move_with_odom(remaining_dis)
+                # self.publish_cmd()
                 return True
 
             ang_vel = utils.sat_proportional_filter(
